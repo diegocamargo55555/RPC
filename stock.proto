@@ -17,3 +17,7 @@ message QuoteResponse {
   double price = 2;
   int64 timestamp = 3; // Timestamp UNIX
 }
+
+//protoc --go_out="paths=source_relative,Mstock.proto=stock-app/stockpb:./stockpb" stock.proto
+//protoc --go-grpc_out="paths=source_relative,Mstock.proto=stock-app/stockpb:./stockpb" stock.proto
+       
