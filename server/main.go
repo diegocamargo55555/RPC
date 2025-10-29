@@ -1,58 +1,72 @@
+// server/main.go
 package main
 
 import (
-	"context"
 	"log"
+	"math"
+	"math/rand"
 	"net"
+	"time"
 
-	// Importa o pacote gRPC
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
-	// Importa o pacote gerado
-	pb "github.com/diegocamargo55555/RPC/proto"
+	pb "stock-app/stockpb"
 )
 
-// Define a porta em que o servidor escutará
-const (
-	port = ":50051"
-)
-
-// 'server' é usado para implementar a interface GreeterServer.
-// Incorporamos 'UnimplementedGreeterServer' para compatibilidade futura.
 type server struct {
-	pb.UnimplementedGreeterServer
+	pb.UnimplementedStockQuoteServiceServer
 }
 
-// SayHello implementa a função RPC definida no .proto
-func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	// Logamos qual cliente fez a requisição.
-	// Isso mostrará as chamadas de múltiplos clientes.
-	log.Printf("Recebida requisição de: %v", in.GetName())
+func (s *server) GetStockQuotes(req *pb.QuoteRequest, stream pb.StockQuoteService_GetStockQuotesServer) error {
+	ticker := req.GetTicker()
+	log.Printf("Cliente solicitou cotações para: %s", ticker)
 
-	// Retornamos a resposta
-	return &pb.HelloReply{Message: "Olá, " + in.GetName() + "! Seja bem-vindo(a)."}, nil
+	currentPrice := rand.Float64()*400.0 + 100.0
+
+	for {
+		if err := stream.Context().Err(); err != nil {
+			log.Printf("Cliente para %s desconectado: %v", ticker, err)
+			return status.Errorf(codes.Canceled, "Cliente desconectado")
+		}
+
+		change := rand.Float64()*2.0 - 1.0
+		currentPrice += change
+
+		if currentPrice < 0.1 {
+			currentPrice = 0.1
+		}
+
+		response := &pb.QuoteResponse{
+			Ticker:    ticker,
+			Price:     math.Round(currentPrice*100) / 100,
+			Timestamp: time.Now().Unix(),
+		}
+
+		if err := stream.Send(response); err != nil {
+			log.Printf("Erro ao enviar stream para %s: %v", ticker, err)
+			return err
+		}
+
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func main() {
-	// [REQUISITO B] Escutar em todas as interfaces de rede
-	// Usar ":50051" (ou "0.0.0.0:50051") é crucial para aceitar conexões
-	// de outras máquinas, e não apenas de 'localhost'.
-	lis, err := net.Listen("tcp", port)
+	log.Println("Iniciando servidor gRPC na porta 50051...")
+
+	lis, err := net.Listen("tcp", "[::]:50051")
 	if err != nil {
-		log.Fatalf("Falha ao escutar na porta %s: %v", port, err)
+		log.Fatalf("Falha ao ouvir: %v", err)
 	}
 
-	log.Printf("Servidor gRPC escutando em %v", lis.Addr())
-
-	// Cria uma nova instância do servidor gRPC
 	s := grpc.NewServer()
 
-	// Registra nosso serviço 'Greeter' no servidor gRPC
-	pb.RegisterGreeterServer(s, &server{})
+	pb.RegisterStockQuoteServiceServer(s, &server{})
 
-	// Inicia o servidor. Ele rodará indefinidamente, aceitando
-	// múltiplas conexões de clientes [REQUISITO A]
+	log.Println("Servidor pronto e aguardando conexões.")
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Falha ao iniciar servidor: %v", err)
+		log.Fatalf("Falha ao servir: %v", err)
 	}
 }

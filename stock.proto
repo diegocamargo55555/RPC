@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package stock;
+
+option go_package = "stock-app/stockpb";
+
+service StockQuoteService {
+  rpc GetStockQuotes(QuoteRequest) returns (stream QuoteResponse);
+}
+
+message QuoteRequest {
+  string ticker = 1; // Ex: "AAPL", "GOOGL"
+}
+
+message QuoteResponse {
+  string ticker = 1;
+  double price = 2;
+  int64 timestamp = 3; // Timestamp UNIX
+}
